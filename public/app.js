@@ -3,7 +3,6 @@ const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const urlForm = document.getElementById('url-form');
 const urlInput = document.getElementById('url-input');
-const btnWrite = document.getElementById('btn-write');
 const btnCancel = document.getElementById('btn-cancel');
 const pendingEl = document.getElementById('pending');
 const pendingUrlEl = document.getElementById('pending-url');
@@ -15,8 +14,11 @@ const readUrlEl = document.getElementById('read-url');
 const readMetaEl = document.getElementById('read-meta');
 const readEmptyEl = document.getElementById('read-empty');
 const readEmptyMsgEl = document.getElementById('read-empty-msg');
+const btnClearLog = document.getElementById('btn-clear-log');
+const historyList = document.getElementById('history-list');
 
 let readerConnected = false;
+let executionCount = 0;
 
 function addLog(text, type) {
   const entry = document.createElement('div');
@@ -24,6 +26,45 @@ function addLog(text, type) {
   const time = new Date().toLocaleTimeString();
   entry.innerHTML = '<span class="time">' + time + '</span>' + text;
   logEl.prepend(entry);
+}
+
+function addHistoryEntry(type, status, data) {
+  executionCount++;
+  if (executionCount === 1) {
+    historyList.innerHTML = '';
+  }
+
+  const card = document.createElement('div');
+  card.className = `history-card ${status}`;
+
+  const time = new Date().toLocaleTimeString();
+  let content = `
+    <div class="type">
+      <span>#${executionCount} ${type}</span>
+      <span class="time">${time}</span>
+    </div>
+  `;
+
+  if (status === 'success') {
+    if (data.url) {
+      content += `<a href="${data.url}" target="_blank" class="url">${data.url}</a>`;
+    } else if (type === 'READ') {
+      content += `<div class="err-msg">Sin URL (NDEF vacío)</div>`;
+    }
+
+    content += `
+      <div class="uid">UID: ${data.uid || 'Desconocido'}</div>
+      <div class="meta">${data.cardType || 'NFC'} | ${status.toUpperCase()}</div>
+    `;
+  } else {
+    content += `
+      <div class="err-msg">Error: ${data.error || 'Operación fallida'}</div>
+      <div class="uid">UID: ${data.uid || 'Desconocido'}</div>
+    `;
+  }
+
+  card.innerHTML = content;
+  historyList.prepend(card);
 }
 
 function updateStatus(connected, text, dotClass) {
@@ -108,12 +149,14 @@ function handleEvent(event, data) {
     case 'write:success':
       updateStatus(true, 'Lector: ' + (data.cardType || 'conectado'));
       addLog('Escritura exitosa en ' + data.cardType + ' - ' + data.url, 'success');
+      addHistoryEntry('WRITE', 'success', data);
       showPending(null);
       break;
 
     case 'write:error':
       updateStatus(true, 'Error de escritura', 'error');
       addLog('Error: ' + data.error, 'error');
+      addHistoryEntry('WRITE', 'error', data);
       break;
 
     case 'url:set':
@@ -167,6 +210,7 @@ function handleEvent(event, data) {
         readEmptyMsgEl.textContent = data.message || 'Sin datos';
         addLog('Lectura: ' + (data.message || 'Sin URL'), 'warn');
       }
+      addHistoryEntry('READ', 'success', data);
       break;
 
     case 'read:error':
@@ -174,6 +218,7 @@ function handleEvent(event, data) {
       readPendingEl.classList.add('hidden');
       btnReadCancel.disabled = true;
       addLog('Error de lectura: ' + data.error, 'error');
+      addHistoryEntry('READ', 'error', data);
       break;
 
     case 'reader:error':
@@ -239,6 +284,11 @@ btnReadCancel.addEventListener('click', function () {
     .catch(function (err) {
       addLog('Error: ' + err.message, 'error');
     });
+});
+
+btnClearLog.addEventListener('click', function () {
+  logEl.innerHTML = '';
+  addLog('Log limpiado', 'info');
 });
 
 // Fetch initial status

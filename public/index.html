@@ -3,63 +3,75 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NFC Writer</title>
+    <title>NFC Lab</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="container">
-      <h1>NFC URL Writer</h1>
+    <div class="app-layout">
+      <main class="container">
+        <h1>NFC Lab 🧪</h1>
 
-      <div class="status-bar" id="status-bar">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-text">Conectando...</span>
-      </div>
-
-      <form id="url-form">
-        <input type="url" id="url-input" placeholder="https://ejemplo.com" required />
-        <div class="btn-row">
-          <button type="submit" id="btn-write">Escribir URL</button>
-          <button type="button" id="btn-cancel" class="secondary" disabled>Cancelar</button>
+        <div class="status-bar" id="status-bar">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Conectando...</span>
         </div>
-      </form>
 
-      <div class="section-divider"></div>
+        <form id="url-form">
+          <input type="url" id="url-input" placeholder="https://ejemplo.com" required />
+          <div class="btn-row">
+            <button type="submit" id="btn-write">Escribir URL</button>
+            <button type="button" id="btn-cancel" class="secondary" disabled>Cancelar</button>
+          </div>
+        </form>
 
-      <h2>Leer NFC</h2>
-      <div class="read-section">
-        <div class="btn-row">
-          <button type="button" id="btn-read">Leer tarjeta</button>
-          <button type="button" id="btn-read-cancel" class="secondary" disabled>Cancelar</button>
+        <div class="section-divider"></div>
+
+        <h2>Leer NFC</h2>
+        <div class="read-section">
+          <div class="btn-row">
+            <button type="button" id="btn-read">Leer tarjeta</button>
+            <button type="button" id="btn-read-cancel" class="secondary" disabled>Cancelar</button>
+          </div>
+          <div id="read-pending" class="pending hidden">
+            <small>Acerca una tarjeta NFC al lector para leer...</small>
+          </div>
+          <div id="read-result" class="read-result hidden">
+            <div class="read-result-label">URL encontrada:</div>
+            <a
+              id="read-url"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="read-url-link"
+            ></a>
+            <div id="read-meta" class="read-meta"></div>
+          </div>
+          <div id="read-empty" class="read-empty hidden">
+            <span id="read-empty-msg"></span>
+          </div>
         </div>
-        <div id="read-pending" class="pending hidden">
-          <small>Acerca una tarjeta NFC al lector para leer...</small>
-        </div>
-        <div id="read-result" class="read-result hidden">
-          <div class="read-result-label">URL encontrada:</div>
-          <a
-            id="read-url"
-            href="#"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="read-url-link"
-          ></a>
-          <div id="read-meta" class="read-meta"></div>
-        </div>
-        <div id="read-empty" class="read-empty hidden">
-          <span id="read-empty-msg"></span>
-        </div>
-      </div>
 
-      <div class="section-divider"></div>
+        <div class="section-divider"></div>
 
-      <div id="pending" class="pending hidden">
-        URL pendiente: <strong id="pending-url"></strong> <br /><small
-          >Acerca una tarjeta NFC al lector...</small
-        >
-      </div>
+        <div id="pending" class="pending hidden">
+          URL pendiente: <strong id="pending-url"></strong> <br /><small
+            >Acerca una tarjeta NFC al lector...</small
+          >
+        </div>
 
-      <h2>Log de actividad</h2>
-      <div id="log" class="log"></div>
+        <div class="log-header">
+          <h2>Log de actividad</h2>
+          <button type="button" id="btn-clear-log" class="text-btn">Limpiar log</button>
+        </div>
+        <div id="log" class="log"></div>
+      </main>
+
+      <aside class="sidebar">
+        <h2>Historial de ejecuciones</h2>
+        <div id="history-list" class="history-list">
+          <div class="empty-history">No hay ejecuciones registradas.</div>
+        </div>
+      </aside>
     </div>
 
     <script src="app.js"></script>
