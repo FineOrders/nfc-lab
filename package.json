@@ -1,0 +1,41 @@
+{
+  "name": "nfc-lab",
+  "version": "1.0.0",
+  "description": "NFC Lab: A comprehensive tool for reading and writing NFC tags using Node.js and ACR122U.",
+  "license": "ISC",
+  "author": "Osama Moussatil",
+  "keywords": [
+    "nfc",
+    "acr122u",
+    "pcsc",
+    "ntag",
+    "ndef",
+    "node.js",
+    "websocket"
+  ],
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "ndef": "^0.2.0",
+    "nfc-pcsc": "^0.8.1",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.4.0",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.8.1",
+    "vitest": "^3.2.4"
+  }
+}
