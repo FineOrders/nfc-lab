@@ -1,8 +1,6 @@
 const logEl = document.getElementById('log');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
-const urlForm = document.getElementById('url-form');
-const urlInput = document.getElementById('url-input');
 const btnCancel = document.getElementById('btn-cancel');
 const pendingEl = document.getElementById('pending');
 const pendingUrlEl = document.getElementById('pending-url');
@@ -17,8 +15,33 @@ const readEmptyMsgEl = document.getElementById('read-empty-msg');
 const btnClearLog = document.getElementById('btn-clear-log');
 const historyList = document.getElementById('history-list');
 
+// New elements for tabs
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const writeForms = document.querySelectorAll('.write-form');
+const exampleBtns = document.querySelectorAll('.btn-example');
+
 let readerConnected = false;
 let executionCount = 0;
+
+// Examples data
+const EXAMPLES = {
+  url: { url: 'https://github.com/osamamoussatil' },
+  text: { text: '¡Hola! Esta es una tarjeta NFC configurada con NFC Lab 🧪', language: 'es' },
+  vcard: {
+    name: 'Osama Moussatil',
+    phone: '+34 600 000 000',
+    email: 'osama@ejemplo.com',
+    org: 'NFC Lab OpenCode',
+  },
+  sms: { phone: '+34 600 000 000', message: 'Enviado desde mi etiqueta NFC' },
+  phone: { phone: '+34 600 000 000' },
+  email: {
+    to: 'hola@ejemplo.com',
+    subject: 'Contacto NFC',
+    body: 'Hola, te escribo desde mi tarjeta NFC.',
+  },
+};
 
 function addLog(text, type) {
   const entry = document.createElement('div');
@@ -47,9 +70,9 @@ function addHistoryEntry(type, status, data) {
 
   if (status === 'success') {
     if (data.url) {
-      content += `<a href="${data.url}" target="_blank" class="url">${data.url}</a>`;
+      content += `<div class="url">${data.url}</div>`;
     } else if (type === 'READ') {
-      content += `<div class="err-msg">Sin URL (NDEF vacío)</div>`;
+      content += `<div class="err-msg">Sin datos (NDEF vacío)</div>`;
     }
 
     content += `
@@ -72,9 +95,11 @@ function updateStatus(connected, text, dotClass) {
   statusText.textContent = text;
 }
 
-function showPending(url) {
-  if (url) {
-    pendingUrlEl.textContent = url;
+function showPending(data) {
+  if (data) {
+    // data can be just a URL string (old API) or an object (new API)
+    const display = typeof data === 'string' ? data : data.url;
+    pendingUrlEl.textContent = display;
     pendingEl.classList.remove('hidden');
     btnCancel.disabled = false;
   } else {
@@ -106,7 +131,7 @@ function handleEvent(event, data) {
     case 'status':
       readerConnected = data.readerConnected;
       updateStatus(readerConnected, readerConnected ? 'Lector: ' + data.readerName : 'Sin lector');
-      showPending(data.pendingUrl);
+      showPending(data.pendingWrite || data.pendingUrl);
       break;
 
     case 'reader:connect':
@@ -139,19 +164,32 @@ function handleEvent(event, data) {
 
     case 'write:start':
       updateStatus(true, 'Escribiendo...', 'writing');
-      addLog('Escribiendo URL: ' + data.url + ' en UID: ' + data.uid, 'warn');
+      addLog(
+        'Escribiendo ' + (data.type || 'datos') + ': ' + data.url + ' en UID: ' + data.uid,
+        'warn'
+      );
       break;
 
     case 'write:progress':
       addLog(data.step + (data.detail ? ' (' + data.detail + ')' : ''), 'info');
       break;
 
-    case 'write:success':
+    case 'write:success': {
       updateStatus(true, 'Lector: ' + (data.cardType || 'conectado'));
-      addLog('Escritura exitosa en ' + data.cardType + ' - ' + data.url, 'success');
+      const writeDetails = data.bytesWritten
+        ? ` [${data.bytesWritten} bytes, ${data.pagesWritten} pags]`
+        : '';
+      addLog(
+        'Escritura exitosa (' + (data.type || 'NDEF') + ') - ' + data.url + writeDetails,
+        'success'
+      );
+      if (data.warning) {
+        addLog('ADVERTENCIA: ' + data.warning, 'warn');
+      }
       addHistoryEntry('WRITE', 'success', data);
       showPending(null);
       break;
+    }
 
     case 'write:error':
       updateStatus(true, 'Error de escritura', 'error');
@@ -160,13 +198,13 @@ function handleEvent(event, data) {
       break;
 
     case 'url:set':
-      showPending(data.url);
-      addLog('URL establecida: ' + data.url, 'info');
+      showPending(data);
+      addLog('Escritura preparada (' + (data.type || 'url') + '): ' + (data.url || data), 'info');
       break;
 
     case 'url:clear':
       showPending(null);
-      addLog('URL pendiente cancelada', 'info');
+      addLog('Escritura pendiente cancelada', 'info');
       break;
 
     case 'read:pending':
@@ -199,16 +237,15 @@ function handleEvent(event, data) {
       if (data.url) {
         readResultEl.classList.remove('hidden');
         readEmptyEl.classList.add('hidden');
-        readUrlEl.href = data.url;
         readUrlEl.textContent = data.url;
         readMetaEl.textContent =
           data.cardType + ' | UID: ' + data.uid + ' | ' + data.records + ' registro(s)';
-        addLog('URL leida: ' + data.url + ' (' + data.cardType + ')', 'success');
+        addLog('Lectura exitosa: ' + data.url, 'success');
       } else {
         readResultEl.classList.add('hidden');
         readEmptyEl.classList.remove('hidden');
         readEmptyMsgEl.textContent = data.message || 'Sin datos';
-        addLog('Lectura: ' + (data.message || 'Sin URL'), 'warn');
+        addLog('Lectura: ' + (data.message || 'Sin datos'), 'warn');
       }
       addHistoryEntry('READ', 'success', data);
       break;
@@ -228,38 +265,104 @@ function handleEvent(event, data) {
   }
 }
 
-// Form handlers
-urlForm.addEventListener('submit', function (e) {
-  e.preventDefault();
-  var url = urlInput.value.trim();
-  if (!url) return;
+// Tab Switching
+tabBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
 
-  fetch('/api/url', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: url }),
-  })
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      if (data.error) {
-        addLog('Error: ' + data.error, 'error');
-      } else {
-        urlInput.value = '';
-      }
-    })
-    .catch(function (err) {
-      addLog('Error de red: ' + err.message, 'error');
+    // Update buttons
+    tabBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update panels
+    tabPanels.forEach((p) => {
+      p.classList.remove('active');
+      if (p.id === `panel-${tab}`) p.classList.add('active');
     });
+  });
+});
+
+// Example Loading
+exampleBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const form = btn.closest('form');
+    const type = form.dataset.type;
+    const example = EXAMPLES[type];
+
+    if (type === 'url') {
+      document.getElementById('url-input').value = example.url;
+    } else if (type === 'text') {
+      document.getElementById('text-input').value = example.text;
+      document.getElementById('text-lang').value = example.language;
+    } else if (type === 'vcard') {
+      document.getElementById('vcard-name').value = example.name;
+      document.getElementById('vcard-phone').value = example.phone;
+      document.getElementById('vcard-email').value = example.email;
+      document.getElementById('vcard-org').value = example.org;
+    } else if (type === 'sms') {
+      document.getElementById('sms-phone').value = example.phone;
+      document.getElementById('sms-message').value = example.message;
+    } else if (type === 'phone') {
+      document.getElementById('phone-input').value = example.phone;
+    } else if (type === 'email') {
+      document.getElementById('email-to').value = example.to;
+      document.getElementById('email-subject').value = example.subject;
+      document.getElementById('email-body').value = example.body;
+    }
+  });
+});
+
+// Form Submissions
+writeForms.forEach((form) => {
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const type = form.dataset.type;
+    let payload = {};
+
+    if (type === 'url') {
+      payload.url = document.getElementById('url-input').value.trim();
+    } else if (type === 'text') {
+      payload.text = document.getElementById('text-input').value.trim();
+      payload.language = document.getElementById('text-lang').value;
+    } else if (type === 'vcard') {
+      payload.name = document.getElementById('vcard-name').value.trim();
+      payload.phone = document.getElementById('vcard-phone').value.trim();
+      payload.email = document.getElementById('vcard-email').value.trim();
+      payload.org = document.getElementById('vcard-org').value.trim();
+    } else if (type === 'sms') {
+      payload.phone = document.getElementById('sms-phone').value.trim();
+      payload.message = document.getElementById('sms-message').value.trim();
+    } else if (type === 'phone') {
+      payload.phone = document.getElementById('phone-input').value.trim();
+    } else if (type === 'email') {
+      payload.to = document.getElementById('email-to').value.trim();
+      payload.subject = document.getElementById('email-subject').value.trim();
+      payload.body = document.getElementById('email-body').value.trim();
+    }
+
+    fetch('/api/write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, payload }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          addLog('Error: ' + data.error, 'error');
+        } else {
+          // Success handled via WS
+        }
+      })
+      .catch((err) => {
+        addLog('Error de red: ' + err.message, 'error');
+      });
+  });
 });
 
 btnCancel.addEventListener('click', function () {
-  fetch('/api/url', { method: 'DELETE' })
-    .then(function (r) {
-      return r.json();
-    })
-    .catch(function (err) {
+  fetch('/api/write', { method: 'DELETE' })
+    .then((r) => r.json())
+    .catch((err) => {
       addLog('Error: ' + err.message, 'error');
     });
 });
@@ -268,20 +371,16 @@ btnRead.addEventListener('click', function () {
   readResultEl.classList.add('hidden');
   readEmptyEl.classList.add('hidden');
   fetch('/api/read', { method: 'POST' })
-    .then(function (r) {
-      return r.json();
-    })
-    .catch(function (err) {
+    .then((r) => r.json())
+    .catch((err) => {
       addLog('Error: ' + err.message, 'error');
     });
 });
 
 btnReadCancel.addEventListener('click', function () {
   fetch('/api/read', { method: 'DELETE' })
-    .then(function (r) {
-      return r.json();
-    })
-    .catch(function (err) {
+    .then((r) => r.json())
+    .catch((err) => {
       addLog('Error: ' + err.message, 'error');
     });
 });
@@ -293,9 +392,7 @@ btnClearLog.addEventListener('click', function () {
 
 // Fetch initial status
 fetch('/api/status')
-  .then(function (r) {
-    return r.json();
-  })
-  .then(function (data) {
+  .then((r) => r.json())
+  .then((data) => {
     handleEvent('status', data);
   });

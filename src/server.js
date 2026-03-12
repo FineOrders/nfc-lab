@@ -14,6 +14,26 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // --- REST API ---
 
+app.post('/api/write', (req, res) => {
+  const { type, payload } = req.body;
+
+  if (!type || !payload) {
+    return res.status(400).json({ error: 'Tipo y payload requeridos' });
+  }
+
+  // Basic validation per type
+  if (type === 'url') {
+    try {
+      new URL(payload.url);
+    } catch {
+      return res.status(400).json({ error: 'URL invalida' });
+    }
+  }
+
+  nfcWriter.setWriteData(type, payload);
+  res.json({ ok: true });
+});
+
 app.post('/api/url', (req, res) => {
   const { url } = req.body;
 
@@ -39,7 +59,12 @@ app.get('/api/url', (req, res) => {
 });
 
 app.delete('/api/url', (req, res) => {
-  nfcWriter.clearUrl();
+  nfcWriter.clearWriteData();
+  res.json({ ok: true });
+});
+
+app.delete('/api/write', (req, res) => {
+  nfcWriter.clearWriteData();
   res.json({ ok: true });
 });
 

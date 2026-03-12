@@ -9,12 +9,19 @@ class NfcWriter extends EventEmitter {
   constructor() {
     super();
     this.nfc = new NFC();
-    this.pendingUrl = null;
+    this.pendingWrite = null; // { type, payload }
     this.isWriting = false;
     this.readPending = false;
     this.readerConnected = false;
     this.readerName = null;
     this._init();
+  }
+
+  // Getter for backward compatibility
+  get pendingUrl() {
+    return this.pendingWrite && this.pendingWrite.type === 'url'
+      ? this.pendingWrite.payload.url
+      : null;
   }
 
   _init() {
@@ -31,8 +38,8 @@ class NfcWriter extends EventEmitter {
           return;
         }
 
-        if (!this.pendingUrl) {
-          this.emit('card:idle', { uid: card.uid, message: 'No hay URL pendiente' });
+        if (!this.pendingWrite) {
+          this.emit('card:idle', { uid: card.uid, message: 'Nada pendiente para escribir' });
           return;
         }
 
@@ -41,7 +48,7 @@ class NfcWriter extends EventEmitter {
           return;
         }
 
-        await this._writeUrl(reader, card);
+        await this._writeData(reader, card);
       });
 
       reader.on('card.off', (card) => {
@@ -64,20 +71,85 @@ class NfcWriter extends EventEmitter {
     });
   }
 
-  async _writeUrl(reader, card) {
+  _encodeTextPayload(text, language) {
+    // Custom UTF-8 safe text encoder (fixes ndef library UTF-8 multibyte bug)
+    const lang = language || 'en';
+    const langBytes = Buffer.from(lang, 'utf8');
+    const textBytes = Buffer.from(text, 'utf8');
+
+    // Status byte: UTF-8 encoding (bit 7 = 0) + language code length (bits 0-5)
+    const statusByte = langBytes.length & 0x3f;
+
+    // Payload: [status byte] [language code bytes] [text bytes]
+    const payload = Buffer.alloc(1 + langBytes.length + textBytes.length);
+    payload[0] = statusByte;
+    langBytes.copy(payload, 1);
+    textBytes.copy(payload, 1 + langBytes.length);
+
+    return Array.from(payload);
+  }
+
+  _buildNdefRecord(type, payload) {
+    switch (type) {
+      case 'url':
+        return ndef.uriRecord(payload.url);
+      case 'text':
+        // Use custom encoder instead of ndef.textRecord to fix UTF-8 multibyte bug
+        return ndef.record(
+          ndef.TNF_WELL_KNOWN,
+          ndef.RTD_TEXT,
+          [],
+          this._encodeTextPayload(payload.text, payload.language || 'en')
+        );
+      case 'phone':
+        return ndef.uriRecord(`tel:${payload.phone}`);
+      case 'sms':
+        return ndef.uriRecord(
+          `sms:${payload.phone}?body=${encodeURIComponent(payload.message || '')}`
+        );
+      case 'email': {
+        const query = [];
+        if (payload.subject) query.push(`subject=${encodeURIComponent(payload.subject)}`);
+        if (payload.body) query.push(`body=${encodeURIComponent(payload.body)}`);
+        const queryString = query.length > 0 ? `?${query.join('&')}` : '';
+        return ndef.uriRecord(`mailto:${payload.to}${queryString}`);
+      }
+      case 'vcard': {
+        const vcard = [
+          'BEGIN:VCARD',
+          'VERSION:3.0',
+          `FN:${payload.name}`,
+          `N:${payload.name.split(' ').reverse().join(';')};;;`,
+          payload.org ? `ORG:${payload.org}` : '',
+          payload.phone ? `TEL;TYPE=CELL:${payload.phone}` : '',
+          payload.email ? `EMAIL;TYPE=INTERNET:${payload.email}` : '',
+          'END:VCARD',
+        ]
+          .filter(Boolean)
+          .join('\r\n');
+        return ndef.mimeMediaRecord('text/vcard', Buffer.from(vcard));
+      }
+      default:
+        throw new Error(`Tipo de registro no soportado: ${type}`);
+    }
+  }
+
+  async _writeData(reader, card) {
     this.isWriting = true;
-    const url = this.pendingUrl;
+    const { type, payload } = this.pendingWrite;
+    const displayValue =
+      payload.url || payload.text || payload.name || payload.phone || payload.to || 'datos';
 
     try {
       // Step 1: Detect card type
-      this.emit('write:start', { uid: card.uid, url });
+      this.emit('write:start', { uid: card.uid, type, url: displayValue });
       const cardInfo = await detectCardType(reader);
       this.emit('write:progress', {
         step: 'Tipo de tarjeta detectado',
         detail: `${cardInfo.type}, CC init: ${cardInfo.ccInitialized}`,
       });
 
-      // Step 2: Initialize CC if needed (only on truly virgin cards)
+      // Step 2: Initialize CC if needed
       if (!cardInfo.ccInitialized) {
         this.emit('write:progress', { step: 'Inicializando Capability Container' });
         await writePage(reader, 3, cardInfo.ccBytes);
@@ -87,11 +159,11 @@ class NfcWriter extends EventEmitter {
         });
       }
 
-      // Step 3: Create NDEF URI record
-      const uriRecord = ndef.uriRecord(url);
-      const ndefMessage = Buffer.from(ndef.encodeMessage([uriRecord]));
+      // Step 3: Create NDEF record
+      const record = this._buildNdefRecord(type, payload);
+      const ndefMessage = Buffer.from(ndef.encodeMessage([record]));
       this.emit('write:progress', {
-        step: 'NDEF URI creado',
+        step: `NDEF ${type.toUpperCase()} creado`,
         detail: `${ndefMessage.length} bytes`,
       });
 
@@ -102,7 +174,7 @@ class NfcWriter extends EventEmitter {
       // Step 5: Validate size
       if (tlvData.length > cardInfo.userBytes) {
         throw new Error(
-          `URL demasiado larga: ${tlvData.length} bytes > ${cardInfo.userBytes} bytes disponibles`
+          `Datos demasiado largos: ${tlvData.length} bytes > ${cardInfo.userBytes} bytes disponibles`
         );
       }
 
@@ -114,7 +186,7 @@ class NfcWriter extends EventEmitter {
       const dataPages = paddedLength / 4;
       const startPage = cardInfo.userStartPage;
 
-      // Step 7: Write data pages using raw NTAG WRITE command
+      // Step 7: Write data pages
       for (let i = 0; i < dataPages; i++) {
         const page = startPage + i;
         if (page > cardInfo.userEndPage) {
@@ -124,7 +196,7 @@ class NfcWriter extends EventEmitter {
         await writePage(reader, page, pageData);
       }
 
-      // Step 8: Zero-fill a few extra pages to erase old data (stop on first error)
+      // Step 8: Zero-fill a few extra pages
       const extraPages = 8;
       let erasedPages = 0;
       for (let i = dataPages; i < dataPages + extraPages; i++) {
@@ -143,7 +215,7 @@ class NfcWriter extends EventEmitter {
         detail: `${dataPages} paginas de datos + ${erasedPages} paginas borradas`,
       });
 
-      // Step 9: Verify by reading back page by page
+      // Step 9: Verify
       this.emit('write:progress', { step: 'Verificando escritura...' });
       await new Promise((r) => setTimeout(r, 50));
 
@@ -166,19 +238,29 @@ class NfcWriter extends EventEmitter {
         }
       }
 
-      this.pendingUrl = null;
+      this.pendingWrite = null;
       if (verified) {
-        this.emit('write:success', { uid: card.uid, url, cardType: cardInfo.type });
+        this.emit('write:success', {
+          uid: card.uid,
+          url: displayValue,
+          type,
+          cardType: cardInfo.type,
+          bytesWritten: tlvData.length,
+          pagesWritten: dataPages,
+        });
       } else {
         this.emit('write:success', {
           uid: card.uid,
-          url,
+          url: displayValue,
+          type,
           cardType: cardInfo.type,
-          warning: `Escritura completada pero verificacion no disponible: ${verifyError}`,
+          bytesWritten: tlvData.length,
+          pagesWritten: dataPages,
+          warning: `Escritura completada pero verificacion falló: ${verifyError}`,
         });
       }
     } catch (err) {
-      this.emit('write:error', { uid: card.uid, url, error: err.message });
+      this.emit('write:error', { uid: card.uid, url: displayValue, type, error: err.message });
     } finally {
       this.isWriting = false;
     }
@@ -189,13 +271,10 @@ class NfcWriter extends EventEmitter {
     this.emit('read:start', { uid: card.uid });
 
     try {
-      // Small delay to let the reader stabilize after card detection
       await new Promise((r) => setTimeout(r, 150));
-
       const cardInfo = await detectCardType(reader);
       this.emit('read:progress', { step: 'Tarjeta detectada', detail: cardInfo.type });
 
-      // Read page by page using readPage (proven to work during write verification)
       const pages = [];
       for (let page = cardInfo.userStartPage; page <= cardInfo.userEndPage; page++) {
         let pageData = null;
@@ -209,8 +288,6 @@ class NfcWriter extends EventEmitter {
         }
         if (!pageData) break;
         pages.push(pageData);
-
-        // Stop early if we hit a terminator TLV (0xFE)
         if (pageData.indexOf(0xfe) !== -1) break;
       }
 
@@ -226,7 +303,7 @@ class NfcWriter extends EventEmitter {
 
       const rawData = Buffer.concat(pages);
       const hexPreview = rawData
-        .subarray(0, 32)
+        .subarray(0, Math.min(64, rawData.length))
         .toString('hex')
         .match(/.{1,2}/g)
         .join(' ');
@@ -234,42 +311,65 @@ class NfcWriter extends EventEmitter {
         step: 'Datos leidos',
         detail: `${rawData.length} bytes, ${pages.length} paginas`,
       });
-      this.emit('read:progress', { step: 'Hex dump (primeros 32 bytes)', detail: hexPreview });
+      this.emit('read:progress', {
+        step: 'Primeros bytes (hex)',
+        detail: hexPreview,
+      });
 
       const ndefBytes = unwrapNdefTlv(rawData);
 
       if (!ndefBytes || ndefBytes.length === 0) {
+        // Enhanced debug info for empty NDEF
+        const hexDump = rawData
+          .subarray(0, 64)
+          .toString('hex')
+          .match(/.{1,2}/g)
+          .join(' ');
         this.emit('read:success', {
           uid: card.uid,
           cardType: cardInfo.type,
           url: null,
-          message: 'Tarjeta sin datos NDEF. Hex: ' + hexPreview,
+          message: `Tarjeta sin datos NDEF válidos. Raw: ${hexDump}`,
         });
         return;
       }
 
-      // Decode NDEF message
+      this.emit('read:progress', {
+        step: 'NDEF TLV extraído',
+        detail: `${ndefBytes.length} bytes NDEF`,
+      });
+
       const records = ndef.decodeMessage(Array.from(ndefBytes));
-      let url = null;
+      let displayUrl = null;
 
       for (const record of records) {
         if (record.tnf === ndef.TNF_WELL_KNOWN) {
           const typeStr = String.fromCharCode.apply(null, record.type);
           if (typeStr === 'U') {
-            url = ndef.uri.decodePayload(record.payload);
+            displayUrl = ndef.uri.decodePayload(record.payload);
           } else if (typeStr === 'T') {
-            url = ndef.text.decodePayload(record.payload);
+            // Custom UTF-8 safe text decoder
+            const payload = Buffer.from(record.payload);
+            const statusByte = payload[0];
+            const languageCodeLength = statusByte & 0x3f;
+            const textBytes = payload.slice(1 + languageCodeLength);
+            displayUrl = textBytes.toString('utf8');
           }
-          if (url) break;
+        } else if (record.tnf === ndef.TNF_MIME_MEDIA) {
+          const typeStr = String.fromCharCode.apply(null, record.type);
+          if (typeStr === 'text/vcard') {
+            displayUrl = 'Tarjeta de contacto (vCard)';
+          }
         }
+        if (displayUrl) break;
       }
 
       this.emit('read:success', {
         uid: card.uid,
         cardType: cardInfo.type,
-        url: url,
+        url: displayUrl,
         records: records.length,
-        message: url ? 'URL encontrada' : 'NDEF sin URL',
+        message: displayUrl ? 'Datos encontrados' : 'NDEF sin datos reconocibles',
       });
     } catch (err) {
       this.emit('read:error', { uid: card.uid, error: err.message });
@@ -286,21 +386,33 @@ class NfcWriter extends EventEmitter {
     this.emit('read:cancel', {});
   }
 
+  setWriteData(type, payload) {
+    this.pendingWrite = { type, payload };
+    const displayValue =
+      payload.url || payload.text || payload.name || payload.phone || payload.to || 'datos';
+    this.emit('url:set', { type, url: displayValue });
+  }
+
+  clearWriteData() {
+    this.pendingWrite = null;
+    this.emit('url:clear', {});
+  }
+
+  // Backward compatibility
   setUrl(url) {
-    this.pendingUrl = url;
-    this.emit('url:set', { url });
+    this.setWriteData('url', { url });
   }
 
   clearUrl() {
-    this.pendingUrl = null;
-    this.emit('url:clear', {});
+    this.clearWriteData();
   }
 
   getStatus() {
     return {
       readerConnected: this.readerConnected,
       readerName: this.readerName,
-      pendingUrl: this.pendingUrl,
+      pendingUrl: this.pendingUrl, // for compatibility
+      pendingWrite: this.pendingWrite,
       isWriting: this.isWriting,
       readPending: this.readPending,
     };

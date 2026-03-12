@@ -16,48 +16,170 @@
           <span id="status-text">Conectando...</span>
         </div>
 
-        <form id="url-form">
-          <input type="url" id="url-input" placeholder="https://ejemplo.com" required />
-          <div class="btn-row">
-            <button type="submit" id="btn-write">Escribir URL</button>
-            <button type="button" id="btn-cancel" class="secondary" disabled>Cancelar</button>
+        <section class="write-section">
+          <h2>Opciones de escritura</h2>
+          <div class="write-tabs" id="write-tabs">
+            <button class="tab-btn active" data-tab="url">URL</button>
+            <button class="tab-btn" data-tab="text">Texto</button>
+            <button class="tab-btn" data-tab="vcard">vCard</button>
+            <button class="tab-btn" data-tab="sms">SMS</button>
+            <button class="tab-btn" data-tab="phone">Tel</button>
+            <button class="tab-btn" data-tab="email">Email</button>
           </div>
-        </form>
+
+          <div class="tab-content">
+            <!-- URL Panel -->
+            <div class="tab-panel active" id="panel-url">
+              <form class="write-form" data-type="url">
+                <div class="form-group">
+                  <label for="url-input">URL del sitio web</label>
+                  <input type="url" id="url-input" placeholder="https://ejemplo.com" required />
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Text Panel -->
+            <div class="tab-panel" id="panel-text">
+              <form class="write-form" data-type="text">
+                <div class="form-group">
+                  <label for="text-input">Texto libre</label>
+                  <textarea id="text-input" placeholder="Escribe algo aquí..." required></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="text-lang">Idioma</label>
+                  <select id="text-lang">
+                    <option value="es">Español</option>
+                    <option value="en">Inglés</option>
+                  </select>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- vCard Panel -->
+            <div class="tab-panel" id="panel-vcard">
+              <form class="write-form" data-type="vcard">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Nombre completo</label>
+                    <input type="text" id="vcard-name" placeholder="Juan Pérez" required />
+                  </div>
+                  <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="vcard-phone" placeholder="+34 600 000 000" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="vcard-email" placeholder="juan@email.com" />
+                  </div>
+                  <div class="form-group">
+                    <label>Organización</label>
+                    <input type="text" id="vcard-org" placeholder="Mi Empresa S.L." />
+                  </div>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- SMS Panel -->
+            <div class="tab-panel" id="panel-sms">
+              <form class="write-form" data-type="sms">
+                <div class="form-group">
+                  <label>Número de teléfono</label>
+                  <input type="tel" id="sms-phone" placeholder="+34 600 000 000" required />
+                </div>
+                <div class="form-group">
+                  <label>Mensaje</label>
+                  <textarea id="sms-message" placeholder="Texto del SMS..."></textarea>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Phone Panel -->
+            <div class="tab-panel" id="panel-phone">
+              <form class="write-form" data-type="phone">
+                <div class="form-group">
+                  <label>Número para llamar</label>
+                  <input type="tel" id="phone-input" placeholder="+34 600 000 000" required />
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Email Panel -->
+            <div class="tab-panel" id="panel-email">
+              <form class="write-form" data-type="email">
+                <div class="form-group">
+                  <label>Destinatario</label>
+                  <input type="email" id="email-to" placeholder="info@ejemplo.com" required />
+                </div>
+                <div class="form-group">
+                  <label>Asunto</label>
+                  <input type="text" id="email-subject" placeholder="Contacto desde NFC" />
+                </div>
+                <div class="form-group">
+                  <label>Cuerpo del mensaje</label>
+                  <textarea id="email-body" placeholder="Hola..."></textarea>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Preparar Escritura</button>
+                  <button type="button" class="btn-example secondary">Cargar Ejemplo</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div id="pending" class="pending hidden">
+            <div class="pending-info">
+              <span class="pending-label">Escritura pendiente:</span>
+              <strong id="pending-url"></strong>
+            </div>
+            <button type="button" id="btn-cancel" class="secondary">Cancelar</button>
+            <br /><small>Acerca una tarjeta NFC al lector...</small>
+          </div>
+        </section>
 
         <div class="section-divider"></div>
 
-        <h2>Leer NFC</h2>
-        <div class="read-section">
+        <section class="read-section">
+          <h2>Leer NFC</h2>
           <div class="btn-row">
-            <button type="button" id="btn-read">Leer tarjeta</button>
+            <button type="button" id="btn-read" class="btn-read">Leer tarjeta</button>
             <button type="button" id="btn-read-cancel" class="secondary" disabled>Cancelar</button>
           </div>
           <div id="read-pending" class="pending hidden">
             <small>Acerca una tarjeta NFC al lector para leer...</small>
           </div>
           <div id="read-result" class="read-result hidden">
-            <div class="read-result-label">URL encontrada:</div>
-            <a
-              id="read-url"
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="read-url-link"
-            ></a>
+            <div class="read-result-label">Contenido encontrado:</div>
+            <div id="read-url" class="read-url-text"></div>
             <div id="read-meta" class="read-meta"></div>
           </div>
           <div id="read-empty" class="read-empty hidden">
             <span id="read-empty-msg"></span>
           </div>
-        </div>
+        </section>
 
         <div class="section-divider"></div>
-
-        <div id="pending" class="pending hidden">
-          URL pendiente: <strong id="pending-url"></strong> <br /><small
-            >Acerca una tarjeta NFC al lector...</small
-          >
-        </div>
 
         <div class="log-header">
           <h2>Log de actividad</h2>
