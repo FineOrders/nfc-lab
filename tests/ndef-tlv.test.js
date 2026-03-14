@@ -1,5 +1,5 @@
-const { describe, it, expect } = require('vitest');
-const { wrapNdefTlv, unwrapNdefTlv } = require('../src/lib/ndef-tlv');
+import { describe, it, expect } from 'vitest';
+import { wrapNdefTlv, unwrapNdefTlv } from '../src/lib/ndef-tlv.js';
 
 describe('ndef-tlv', () => {
   describe('wrapNdefTlv', () => {

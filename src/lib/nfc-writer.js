@@ -217,23 +217,45 @@ class NfcWriter extends EventEmitter {
 
       // Step 9: Verify
       this.emit('write:progress', { step: 'Verificando escritura...' });
-      await new Promise((r) => setTimeout(r, 50));
+      // Increased settle delay to 250ms to allow NTAG internal write completion
+      // NTAG EEPROM write time is ~4ms per page, but bus latency can add delay
+      await new Promise((r) => setTimeout(r, 250));
 
       let verified = true;
       let verifyError = null;
       for (let i = 0; i < dataPages; i++) {
         const page = startPage + i;
         const expected = buffer.subarray(i * 4, (i + 1) * 4);
-        try {
-          const actual = await readPage(reader, page);
-          if (expected.compare(actual) !== 0) {
-            verified = false;
-            verifyError = `Pagina ${page}: esperado ${expected.toString('hex')}, leido ${actual.toString('hex')}`;
-            break;
+
+        // Retry verification up to 2 times for each page
+        let pageVerified = false;
+        let lastReadError = null;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const actual = await readPage(reader, page);
+            if (expected.compare(actual) === 0) {
+              pageVerified = true;
+              break;
+            } else {
+              lastReadError = `Pagina ${page}: esperado ${expected.toString('hex')}, leido ${actual.toString('hex')}`;
+              // Data mismatch - wait before retry
+              if (attempt < 1) {
+                await new Promise((r) => setTimeout(r, 50));
+              }
+            }
+          } catch (readErr) {
+            lastReadError = readErr.message;
+            // Read error - wait before retry
+            if (attempt < 1) {
+              await new Promise((r) => setTimeout(r, 50));
+            }
           }
-        } catch (readErr) {
+        }
+
+        if (!pageVerified) {
           verified = false;
-          verifyError = readErr.message;
+          verifyError = lastReadError;
           break;
         }
       }

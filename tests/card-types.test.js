@@ -1,5 +1,5 @@
-const { describe, it, expect } = require('vitest');
-const { detectCardType, CARD_TYPES } = require('../src/lib/card-types');
+import { describe, it, expect } from 'vitest';
+import { detectCardType, CARD_TYPES } from '../src/lib/card-types.js';
 
 describe('card-types', () => {
   it('should export CARD_TYPES configuration', () => {
